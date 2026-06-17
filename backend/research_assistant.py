@@ -10,13 +10,14 @@ from newspaper import Article
 from duckduckgo_search import DDGS
 from langgraph.graph import StateGraph
 from langgraph.graph import END
-
+from fastapi import FastAPI
+from pydantic import BaseModel 
 load_dotenv()
 
 @tool
 def hackernews_top_stories(query: str) -> str:
     """
-    Search HackerNews top stories.
+       Search HackerNews top stories.
     """
 
     top_stories = requests.get(
@@ -187,10 +188,11 @@ def summary_node(state):
     Web Search:
     {state['search_results']}
 
-    Create a detailed report.
+    Create a report.Let the report be in bullet points and do not exceed 500 words.
+    Also give 2-3 follow up questions related to the query and the end of the report.
     """
 
-    response = llm_bind_tools.invoke(prompt)
+    response = llm.invoke(prompt)
 
     return {
         "final_report": response.content
@@ -212,9 +214,31 @@ builder.add_edge("web_search", "summary")
 builder.add_edge("summary", END)
 
 graph = builder.compile()
+from fastapi.middleware.cors import CORSMiddleware
+app = FastAPI()
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:5173","`${import.meta.env.VITE_API_URL}/research`","http://127.0.0.1:5173"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+class QueryRequest(BaseModel):
+    query: str
 
-result = graph.invoke({
-    "query": "Attention is all you need explaination"
-})
+@app.post("/research")
+def research(request: QueryRequest):
 
-print(result["final_report"])
+    result = graph.invoke({
+        "query": request.query
+    })
+
+    return {
+        "report": result["final_report"]
+    }
+
+if __name__ == "__main__":
+    import uvicorn
+
+    uvicorn.run(app, host="0.0.0.0", port=8000)
+
